@@ -1,0 +1,1538 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>政变游戏 - Coup</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#2563eb',
+                        secondary: '#7c3aed',
+                        accent: '#f59e0b',
+                        danger: '#dc2626',
+                        success: '#16a34a',
+                        dark: '#1e293b',
+                        light: '#f8fafc'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif']
+                    },
+                    animation: {
+                        'bounce-slow': 'bounce 2s infinite',
+                        'pulse-slow': 'pulse 3s infinite'
+                    }
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .text-shadow {
+                text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+            }
+            .card-flip {
+                perspective: 1000px;
+            }
+            .card-inner {
+                transition: transform 0.6s;
+                transform-style: preserve-3d;
+            }
+            .card-flip:hover .card-inner {
+                transform: rotateY(180deg);
+            }
+            .card-front, .card-back {
+                backface-visibility: hidden;
+            }
+            .card-back {
+                transform: rotateY(180deg);
+            }
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-gray-900 to-gray-800 min-h-screen text-white">
+    <div id="app" class="container mx-auto px-4 py-8 max-w-6xl">
+        <!-- 欢迎页面 -->
+        <div id="welcome-screen" class="text-center">
+            <div class="mb-8">
+                <h1 class="text-5xl font-bold mb-4 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500">政变游戏</h1>
+                <p class="text-xl text-gray-300">经典的社交推理策略游戏</p>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-3xl mx-auto">
+                <!-- 创建房间 -->
+                <div class="bg-gray-800 bg-opacity-50 backdrop-blur-sm rounded-xl p-6 border border-gray-700 hover:border-blue-500 transition-all">
+                    <h2 class="text-2xl font-semibold mb-4">创建房间</h2>
+                    <div class="space-y-4">
+                        <input 
+                            type="text" 
+                            id="create-name" 
+                            placeholder="输入你的名字" 
+                            class="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                        <button 
+                            id="create-room-btn" 
+                            class="w-full py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 rounded-lg font-semibold transition-all transform hover:scale-105"
+                        >
+                            创建房间
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 加入房间 -->
+                <div class="bg-gray-800 bg-opacity-50 backdrop-blur-sm rounded-xl p-6 border border-gray-700 hover:border-purple-500 transition-all">
+                    <h2 class="text-2xl font-semibold mb-4">加入房间</h2>
+                    <div class="space-y-4">
+                        <input 
+                            type="text" 
+                            id="join-code" 
+                            placeholder="输入房间代码" 
+                            class="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        >
+                        <input 
+                            type="text" 
+                            id="join-name" 
+                            placeholder="输入你的名字" 
+                            class="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        >
+                        <button 
+                            id="join-room-btn" 
+                            class="w-full py-3 bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-500 hover:to-purple-600 rounded-lg font-semibold transition-all transform hover:scale-105"
+                        >
+                            加入房间
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 房间等待页面 -->
+        <div id="room-screen" class="hidden">
+            <div class="bg-gray-800 bg-opacity-50 backdrop-blur-sm rounded-xl p-6 border border-gray-700">
+                <div class="flex justify-between items-center mb-6">
+                    <div>
+                        <h2 class="text-2xl font-bold">房间代码: <span id="room-code-display" class="text-accent font-mono">ABC123</span></h2>
+                        <p class="text-gray-300">等待其他玩家加入...</p>
+                    </div>
+                    <button id="copy-code-btn" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-all">
+                        <i class="fa fa-copy mr-2"></i>复制代码
+                    </button>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- 玩家列表 -->
+                    <div class="lg:col-span-1">
+                        <h3 class="text-xl font-semibold mb-4">玩家列表 (<span id="player-count">0</span>/6)</h3>
+                        <div id="players-list" class="space-y-3 max-h-60 overflow-y-auto">
+                            <!-- 玩家项将在这里动态生成 -->
+                        </div>
+                    </div>
+
+                    <!-- 游戏信息 -->
+                    <div class="lg:col-span-2">
+                        <div class="bg-gray-700 rounded-lg p-4 mb-4">
+                            <h3 class="text-lg font-semibold mb-2">游戏规则</h3>
+                            <div class="text-sm text-gray-300 space-y-2 max-h-40 overflow-y-auto">
+                                <p><strong>基本行动:</strong> 收入(+1金币)、外国援助(+2金币)、政变(-7金币)</p>
+                                <p><strong>角色技能:</strong></p>
+                                <ul class="list-disc pl-5">
+                                    <li><strong>公爵:</strong> 征税(+3金币)，阻止外国援助</li>
+                                    <li><strong>刺客:</strong> 刺杀(-3金币)，目标弃一张牌</li>
+                                    <li><strong>大使:</strong> 交换卡牌，阻止偷窃</li>
+                                    <li><strong>上尉:</strong> 偷窃(+2金币)，阻止偷窃</li>
+                                    <li><strong>女爵:</strong> 免疫刺杀</li>
+                                </ul>
+                                <p><strong>胜利条件:</strong> 成为最后一个存活的玩家</p>
+                            </div>
+                        </div>
+
+                        <div class="flex justify-between items-center">
+                            <button id="leave-room-btn" class="px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg transition-all">
+                                <i class="fa fa-sign-out mr-2"></i>离开房间
+                            </button>
+                            <button id="start-game-btn" class="px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 rounded-lg font-semibold transition-all transform hover:scale-105">
+                                开始游戏
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 游戏主界面 -->
+        <div id="game-screen" class="hidden">
+            <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                <!-- 左侧玩家信息 -->
+                <div class="lg:col-span-1">
+                    <div class="bg-gray-800 bg-opacity-50 backdrop-blur-sm rounded-xl p-6 border border-gray-700">
+                        <h3 class="text-xl font-semibold mb-4">玩家信息</h3>
+                        <div id="current-player-info" class="mb-6 p-4 bg-gray-700 rounded-lg border-2 border-blue-500">
+                            <div class="flex justify-between items-center mb-2">
+                                <span id="current-player-name" class="font-bold text-lg">你</span>
+                                <span id="current-player-coins" class="text-accent text-xl">💰 5</span>
+                            </div>
+                            <div class="flex space-x-2 mb-2">
+                                <div class="w-12 h-16 bg-blue-900 rounded-lg border border-blue-300 flex items-center justify-center">
+                                    <span class="text-2xl">?</span>
+                                </div>
+                                <div class="w-12 h-16 bg-blue-900 rounded-lg border border-blue-300 flex items-center justify-center">
+                                    <span class="text-2xl">?</span>
+                                </div>
+                            </div>
+                            <div class="text-sm text-gray-300">
+                                <span id="player-role-hint" class="italic">你的角色只有你知道</span>
+                            </div>
+                        </div>
+
+                        <div id="other-players" class="space-y-3 max-h-80 overflow-y-auto">
+                            <!-- 其他玩家信息 -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 右侧游戏区域 -->
+                <div class="lg:col-span-3">
+                    <!-- 游戏日志 -->
+                    <div class="bg-gray-800 bg-opacity-50 backdrop-blur-sm rounded-xl p-6 border border-gray-700 mb-6">
+                        <h3 class="text-xl font-semibold mb-4 flex items-center">
+                            <i class="fa fa-history mr-2 text-blue-400"></i>
+                            游戏日志
+                        </h3>
+                        <div id="game-log" class="h-32 overflow-y-auto bg-gray-900 bg-opacity-50 rounded-lg p-4 text-sm space-y-2">
+                            <!-- 日志内容将在这里动态添加 -->
+                        </div>
+                    </div>
+
+                    <!-- 游戏状态 -->
+                    <div class="bg-gray-800 bg-opacity-50 backdrop-blur-sm rounded-xl p-6 border border-gray-700 mb-6">
+                        <div class="flex justify-between items-center mb-4">
+                            <div>
+                                <h3 class="text-xl font-semibold">游戏状态</h3>
+                                <p id="game-status-text" class="text-gray-300">回合 1 - 等待玩家行动</p>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-sm text-gray-400">牌堆剩余</div>
+                                <div id="deck-count" class="text-lg">🃏 15</div>
+                            </div>
+                        </div>
+
+                        <div id="game-log" class="bg-gray-700 rounded-lg p-4 h-32 overflow-y-auto text-sm space-y-1 mb-4">
+                            <!-- 游戏日志 -->
+                        </div>
+
+                        <!-- 挑战阶段 -->
+                        <div id="challenge-phase" class="hidden bg-yellow-900 bg-opacity-30 border border-yellow-600 rounded-lg p-4 mb-4">
+                            <div class="flex justify-between items-center mb-2">
+                                <h4 class="font-semibold text-yellow-400">挑战阶段</h4>
+                                <div id="challenge-countdown" class="text-yellow-400 font-mono text-lg">
+                                    <i class="fa fa-clock-o mr-1"></i>
+                                    <span id="countdown-timer">20</span>秒
+                                </div>
+                            </div>
+                            <p id="challenge-text" class="text-sm mb-3">有人质疑了这个行动！你要挑战吗？</p>
+                            <div class="flex space-x-3">
+                                <button id="challenge-yes-btn" class="px-4 py-2 bg-yellow-600 hover:bg-yellow-500 rounded-lg transition-all">
+                                    挑战
+                                </button>
+                                <button id="challenge-no-btn" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg transition-all">
+                                    不挑战
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 反制阶段 -->
+                    <div id="counteraction-phase" class="hidden bg-purple-900 bg-opacity-30 border border-purple-600 rounded-lg p-4 mb-4">
+                        <div class="flex justify-between items-center mb-2">
+                            <h4 class="font-semibold text-purple-400">反制阶段</h4>
+                            <div id="counteraction-countdown" class="text-purple-400 font-mono text-lg">
+                                <i class="fa fa-clock-o mr-1"></i>
+                                <span id="counteraction-timer">15</span>秒
+                            </div>
+                        </div>
+                        <p id="counteraction-text" class="text-sm mb-3">你可以反制这个行动吗？</p>
+                        <div class="flex space-x-3">
+                            <button id="counteraction-yes-btn" class="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded-lg transition-all">
+                                反制
+                            </button>
+                            <button id="counteraction-no-btn" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg transition-all">
+                                不反制
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 行动按钮 -->
+                    <div id="action-buttons" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                        <button class="action-btn bg-blue-600 hover:bg-blue-500 p-4 rounded-xl transition-all flex flex-col items-center" data-action="income">
+                            <i class="fa fa-plus-circle text-2xl mb-2"></i>
+                            <span class="font-semibold">收入</span>
+                            <span class="text-xs text-gray-300">+1 金币</span>
+                        </button>
+                        <button class="action-btn bg-green-600 hover:bg-green-500 p-4 rounded-xl transition-all flex flex-col items-center" data-action="foreign_aid">
+                            <i class="fa fa-globe text-2xl mb-2"></i>
+                            <span class="font-semibold">外国援助</span>
+                            <span class="text-xs text-gray-300">+2 金币</span>
+                        </button>
+                        <button class="action-btn bg-red-600 hover:bg-red-500 p-4 rounded-xl transition-all flex flex-col items-center" data-action="coup">
+                            <i class="fa fa-bolt text-2xl mb-2"></i>
+                            <span class="font-semibold">政变</span>
+                            <span class="text-xs text-gray-300">-7 金币</span>
+                        </button>
+                        <button class="action-btn bg-purple-600 hover:bg-purple-500 p-4 rounded-xl transition-all flex flex-col items-center" data-action="tax">
+                            <i class="fa fa-money text-2xl mb-2"></i>
+                            <span class="font-semibold">征税</span>
+                            <span class="text-xs text-gray-300">公爵技能</span>
+                        </button>
+                        <button class="action-btn bg-orange-600 hover:bg-orange-500 p-4 rounded-xl transition-all flex flex-col items-center" data-action="assassinate">
+                            <i class="fa fa-crosshairs text-2xl mb-2"></i>
+                            <span class="font-semibold">刺杀</span>
+                            <span class="text-xs text-gray-300">-3 金币</span>
+                        </button>
+                        <button class="action-btn bg-teal-600 hover:bg-teal-500 p-4 rounded-xl transition-all flex flex-col items-center" data-action="exchange">
+                            <i class="fa fa-exchange text-2xl mb-2"></i>
+                            <span class="font-semibold">交换</span>
+                            <span class="text-xs text-gray-300">大使技能</span>
+                        </button>
+                        <button class="action-btn bg-indigo-600 hover:bg-indigo-500 p-4 rounded-xl transition-all flex flex-col items-center" data-action="steal">
+                            <i class="fa fa-hand-paper-o text-2xl mb-2"></i>
+                            <span class="font-semibold">偷窃</span>
+                            <span class="text-xs text-gray-300">上尉技能</span>
+                        </button>
+                    </div>
+
+                    <!-- 目标选择 -->
+                    <div id="target-selection" class="hidden bg-gray-800 bg-opacity-50 backdrop-blur-sm rounded-xl p-6 border border-gray-700 mb-6">
+                        <h3 class="text-xl font-semibold mb-4">选择目标玩家</h3>
+                        <div id="target-players" class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <!-- 目标玩家按钮 -->
+                        </div>
+                        <button id="cancel-target-btn" class="mt-4 px-6 py-2 bg-gray-600 hover:bg-gray-500 rounded-lg transition-all">
+                            取消
+                        </button>
+                    </div>
+
+                    <!-- 弃牌选择 -->
+                    <div id="discard-selection" class="hidden bg-red-900 bg-opacity-30 border border-red-600 rounded-xl p-6 mb-6">
+                        <h3 class="text-xl font-semibold text-red-400 mb-4">选择弃牌</h3>
+                        <p id="discard-text" class="text-gray-300 mb-4">你需要选择一张卡牌弃掉</p>
+                        <div id="discard-cards" class="grid grid-cols-2 gap-4 mb-4">
+                            <!-- 弃牌选择按钮 -->
+                        </div>
+                    </div>
+
+                    <!-- 聊天区域 -->
+                    <div class="bg-gray-800 bg-opacity-50 backdrop-blur-sm rounded-xl p-6 border border-gray-700">
+                        <h3 class="text-xl font-semibold mb-4">聊天</h3>
+                        <div id="chat-messages" class="bg-gray-700 rounded-lg p-4 h-40 overflow-y-auto text-sm space-y-2 mb-4">
+                            <!-- 聊天消息 -->
+                        </div>
+                        <div class="flex space-x-2">
+                            <input 
+                                type="text" 
+                                id="chat-input" 
+                                placeholder="输入消息..." 
+                                class="flex-1 px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                            <button id="send-chat-btn" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg transition-all">
+                                发送
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 游戏结束界面 -->
+        <div id="game-over-screen" class="hidden text-center">
+            <div class="bg-gray-800 bg-opacity-50 backdrop-blur-sm rounded-xl p-8 border border-gray-700 max-w-2xl mx-auto">
+                <h2 class="text-4xl font-bold mb-6 text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-yellow-600">游戏结束！</h2>
+                <div id="winner-info" class="text-2xl font-semibold mb-8">
+                    胜利者: <span id="winner-name" class="text-yellow-400">玩家名称</span>
+                </div>
+                <div class="space-y-4">
+                    <button id="play-again-btn" class="px-8 py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 rounded-lg font-semibold transition-all transform hover:scale-105">
+                        再来一局
+                    </button>
+                    <button id="back-to-menu-btn" class="px-8 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg transition-all">
+                        返回主菜单
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Socket.io -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    
+    <script>
+        // 页面加载时检查是否有存储的游戏状态
+        document.addEventListener('DOMContentLoaded', () => {
+            const savedRoomCode = localStorage.getItem('coup_roomCode');
+            const savedPlayerId = localStorage.getItem('coup_playerId');
+            const savedPlayerName = localStorage.getItem('coup_playerName');
+            
+            if (savedRoomCode && savedPlayerId && savedPlayerName) {
+                // 显示重连提示
+                const reconnectConfirm = confirm(`检测到你之前在房间 ${savedRoomCode} 中有未完成的游戏，是否重新连接？`);
+                if (reconnectConfirm) {
+                    // 直接初始化游戏并尝试重连
+                    window.coupGame = new CoupGame();
+                    setTimeout(() => {
+                        window.coupGame.reconnectToGame(savedRoomCode, savedPlayerId, savedPlayerName);
+                    }, 100);
+                    return;
+                } else {
+                    // 清除存储的信息
+                    localStorage.removeItem('coup_roomCode');
+                    localStorage.removeItem('coup_playerId');
+                    localStorage.removeItem('coup_playerName');
+                }
+            }
+            
+            // 正常初始化游戏
+            window.coupGame = new CoupGame();
+        });
+
+        class CoupGame {
+            constructor() {
+                this.socket = null;
+                this.currentRoom = null;
+                this.currentPlayer = null;
+                this.gameState = null;
+                this.currentAction = null;
+                this.currentTarget = null;
+                
+                this.init();
+            }
+
+            init() {
+                this.bindEvents();
+                this.showScreen('welcome-screen');
+            }
+
+            bindEvents() {
+                // 创建房间
+                document.getElementById('create-room-btn').addEventListener('click', () => this.createRoom());
+                
+                // 加入房间
+                document.getElementById('join-room-btn').addEventListener('click', () => this.joinRoom());
+                
+                // 离开房间
+                document.getElementById('leave-room-btn').addEventListener('click', () => this.leaveRoom());
+                
+                // 开始游戏
+                document.getElementById('start-game-btn').addEventListener('click', () => this.startGame());
+                
+                // 复制房间代码
+                document.getElementById('copy-code-btn').addEventListener('click', () => this.copyRoomCode());
+                
+                // 行动按钮
+                document.querySelectorAll('.action-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => this.handleAction(e.target.dataset.action));
+                });
+                
+                // 挑战按钮
+                document.getElementById('challenge-yes-btn').addEventListener('click', () => this.handleChallenge(true));
+                document.getElementById('challenge-no-btn').addEventListener('click', () => this.handleChallenge(false));
+                
+                // 反制按钮
+                document.getElementById('counteraction-yes-btn').addEventListener('click', () => this.handleCounteraction(true));
+                document.getElementById('counteraction-no-btn').addEventListener('click', () => this.handleCounteraction(false));
+                
+                // 取消目标选择
+                document.getElementById('cancel-target-btn').addEventListener('click', () => this.cancelTargetSelection());
+                
+                // 聊天
+                document.getElementById('send-chat-btn').addEventListener('click', () => this.sendChatMessage());
+                document.getElementById('chat-input').addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') this.sendChatMessage();
+                });
+                
+                // 再来一局
+                document.getElementById('play-again-btn').addEventListener('click', () => this.playAgain());
+                
+                // 返回主菜单
+                document.getElementById('back-to-menu-btn').addEventListener('click', () => this.backToMenu());
+            }
+
+            async createRoom() {
+                const playerName = document.getElementById('create-name').value.trim();
+                if (!playerName) {
+                    this.showError('请输入你的名字');
+                    return;
+                }
+
+                try {
+                    const response = await fetch('http://localhost:3001/api/game/create', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ playerName })
+                    });
+                    const data = await response.json();
+
+                    if (data.success) {
+                        this.currentPlayer = {
+                            id: data.playerId,
+                            name: playerName,
+                            isHost: true
+                        };
+                        this.connectToSocket();
+                        this.joinSocketRoom(data.roomCode, playerName, data.playerId);
+                        this.currentRoom = data.roomCode;
+                        this.updateRoomScreen(data.roomCode, [this.currentPlayer]);
+                    } else {
+                        this.showError(data.message || '创建房间失败');
+                    }
+                } catch (error) {
+                    console.error('创建房间错误:', error);
+                    this.showError('连接服务器失败，请检查服务器是否运行');
+                }
+            }
+
+            async joinRoom() {
+                const roomCode = document.getElementById('join-code').value.trim().toUpperCase();
+                const playerName = document.getElementById('join-name').value.trim();
+                
+                if (!roomCode || !playerName) {
+                    this.showError('请输入房间代码和名字');
+                    return;
+                }
+
+                try {
+                    const response = await fetch('http://localhost:3001/api/game/join', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ roomCode, playerName })
+                    });
+                    const data = await response.json();
+
+                    if (data.success) {
+                        this.currentPlayer = {
+                            id: null, // 将在socket连接后获取
+                            name: playerName,
+                            isHost: false
+                        };
+                        
+                        // 存储游戏信息到localStorage
+                        this.saveGameState(roomCode, null, playerName);
+                        
+                        // 立即更新房间界面，显示当前玩家列表
+                        this.updateRoomScreen(roomCode, data.players);
+                        
+                        this.connectToSocket();
+                        this.joinSocketRoom(roomCode, playerName, null);
+                        this.currentRoom = roomCode;
+                    } else {
+                        this.showError(data.message || '加入房间失败');
+                    }
+                } catch (error) {
+                    console.error('加入房间错误:', error);
+                    this.showError('连接服务器失败，请检查服务器是否运行');
+                }
+            }
+
+            connectToSocket() {
+                this.socket = io('ws://localhost:3001');
+
+                this.socket.on('connect', () => {
+                    console.log('Socket连接成功');
+                });
+
+                this.socket.on('joinRoomSuccess', (data) => {
+                    console.log('加入房间成功:', data);
+                    if (!this.currentPlayer.id) {
+                        this.currentPlayer.id = data.playerId;
+                        this.currentPlayer.isHost = data.isHost;
+                        
+                        // 更新localStorage中的playerId
+                        localStorage.setItem('coup_playerId', data.playerId);
+                    }
+                    this.updateRoomScreen(this.currentRoom, data.players);
+                });
+
+                this.socket.on('playerJoined', (data) => {
+                    console.log('玩家加入:', data);
+                    this.updateRoomScreen(this.currentRoom, data.players);
+                    this.addGameLog(`${data.newPlayer.name} 加入了游戏`);
+                });
+
+                this.socket.on('playerLeft', (data) => {
+                    console.log('玩家离开:', data);
+                    this.updateRoomScreen(this.currentRoom, data.players);
+                    this.addGameLog(`${data.playerName} 离开了游戏`);
+                });
+
+                this.socket.on('gameStarted', (data) => {
+                    console.log('游戏开始:', data);
+                    this.gameState = data.gameState;
+                    this.startGameUI();
+                });
+
+                this.socket.on('gameStateUpdate', (data) => {
+                    console.log('游戏状态更新:', data);
+                    this.gameState = data.gameState;
+                    this.updateGameUI(data.actionResult);
+                });
+
+                this.socket.on('challengeResult', (data) => {
+                    console.log('挑战结果:', data);
+                    this.gameState = data.gameState;
+                    this.handleChallengeResult(data.challengeResult);
+                });
+
+                this.socket.on('challengeCountdownUpdate', (data) => {
+                    console.log('挑战倒计时更新:', data);
+                    this.updateChallengeCountdown(data.countdown);
+                });
+
+                this.socket.on('counteractionRequested', (data) => {
+                    console.log('反制请求:', data);
+                    this.addGameLog(data.message, 'counter');
+                    this.showCounteractionPhase(data);
+                });
+
+                this.socket.on('counteractionCountdownUpdate', (data) => {
+                    console.log('反制倒计时更新:', data);
+                    this.updateCounteractionCountdown(data.countdown);
+                });
+
+                this.socket.on('discardResult', (data) => {
+                    console.log('弃牌结果:', data);
+                    this.gameState = data.gameState;
+                    this.handleDiscardResult(data.discardResult);
+                });
+
+                this.socket.on('blockAction', (data) => {
+                    console.log('反制行动:', data);
+                    this.addGameLog(data.message, 'counter');
+                    this.showBlockPhase(data);
+                });
+
+                this.socket.on('blockCountdownUpdate', (data) => {
+                    console.log('反制倒计时更新:', data);
+                    this.updateBlockCountdown(data.countdown);
+                });
+
+                this.socket.on('cardSwapped', (data) => {
+                    console.log('卡牌交换:', data);
+                    this.addGameLog(data.message, 'info');
+                    this.handleCardSwapped(data);
+                });
+                });
+
+                this.socket.on('chatMessage', (data) => {
+                    console.log('聊天消息:', data);
+                    this.addChatMessage(data);
+                });
+
+                this.socket.on('error', (data) => {
+                    console.error('Socket错误:', data);
+                    this.showError(data.message || '发生错误');
+                });
+
+                this.socket.on('disconnect', () => {
+                    console.log('Socket断开连接');
+                    this.showError('与服务器断开连接');
+                });
+            }
+
+            joinSocketRoom(roomCode, playerName, playerId) {
+                this.socket.emit('joinRoom', { roomCode, playerName, playerId });
+            }
+
+            leaveRoom() {
+                if (this.socket) {
+                    this.socket.emit('leaveRoom', { 
+                        roomCode: this.currentRoom, 
+                        playerId: this.currentPlayer?.id 
+                    });
+                    this.socket.disconnect();
+                }
+                
+                // 清除存储的游戏信息
+                this.clearGameState();
+                
+                this.currentRoom = null;
+                this.currentPlayer = null;
+                this.gameState = null;
+                this.showScreen('welcome-screen');
+            }
+
+            startGame() {
+                if (!this.currentPlayer?.isHost) {
+                    this.showError('只有房主可以开始游戏');
+                    return;
+                }
+
+                this.socket.emit('startGame', { 
+                    roomCode: this.currentRoom, 
+                    playerId: this.currentPlayer.id 
+                });
+            }
+
+            handleAction(action) {
+                if (!this.gameState || this.gameState.status !== 'playing') return;
+                if (this.gameState.currentPlayer !== this.currentPlayer.id) {
+                    this.showError('现在不是你的回合');
+                    return;
+                }
+
+                const player = this.gameState.players.find(p => p.id === this.currentPlayer.id);
+                if (!player || !player.isAlive) return;
+
+                // 检查金币要求
+                if (action === 'coup' && player.coins < 7) {
+                    this.showError('金币不足（需要7金币）');
+                    return;
+                }
+                if (action === 'assassinate' && player.coins < 3) {
+                    this.showError('金币不足（需要3金币）');
+                    return;
+                }
+
+                // 需要选择目标的行动
+                const targetActions = ['coup', 'assassinate', 'steal'];
+                if (targetActions.includes(action)) {
+                    this.currentAction = action;
+                    this.showTargetSelection();
+                    return;
+                }
+
+                // 直接执行的行动
+                this.executeAction(action);
+            }
+
+            showTargetSelection() {
+                const targetPlayers = this.gameState.players.filter(p => 
+                    p.id !== this.currentPlayer.id && p.isAlive
+                );
+
+                const targetContainer = document.getElementById('target-players');
+                targetContainer.innerHTML = '';
+
+                targetPlayers.forEach(player => {
+                    const btn = document.createElement('button');
+                    btn.className = 'target-btn bg-gray-700 hover:bg-gray-600 p-4 rounded-xl transition-all flex flex-col items-center';
+                    btn.innerHTML = `
+                        <span class="font-semibold">${player.name}</span>
+                        <span class="text-sm text-gray-300">💰 ${player.coins}</span>
+                        <div class="flex space-x-1 mt-2">
+                            ${Array(player.cardsCount).fill().map(() => '<span class="text-sm">?</span>').join('')}
+                        </div>
+                    `;
+                    btn.addEventListener('click', () => {
+                        this.currentTarget = player.id;
+                        this.executeAction(this.currentAction, player.id);
+                        this.hideTargetSelection();
+                    });
+                    targetContainer.appendChild(btn);
+                });
+
+                document.getElementById('target-selection').classList.remove('hidden');
+            }
+
+            hideTargetSelection() {
+                document.getElementById('target-selection').classList.add('hidden');
+                this.currentAction = null;
+                this.currentTarget = null;
+            }
+
+            cancelTargetSelection() {
+                this.hideTargetSelection();
+            }
+
+            executeAction(action, targetPlayerId = null) {
+                this.socket.emit('playerAction', {
+                    roomCode: this.currentRoom,
+                    playerId: this.currentPlayer.id,
+                    action,
+                    targetPlayerId
+                });
+            }
+
+            handleChallenge(challenge) {
+                this.socket.emit('challengeAction', {
+                    roomCode: this.currentRoom,
+                    playerId: this.currentPlayer.id,
+                    challenge
+                });
+                document.getElementById('challenge-phase').classList.add('hidden');
+            }
+
+            handleChallengeResult(result) {
+                result.log.forEach(log => this.addGameLog(log));
+            }
+
+            sendChatMessage() {
+                const input = document.getElementById('chat-input');
+                const message = input.value.trim();
+                if (!message) return;
+
+                this.socket.emit('chatMessage', {
+                    roomCode: this.currentRoom,
+                    playerId: this.currentPlayer.id,
+                    message
+                });
+
+                input.value = '';
+            }
+
+            addChatMessage(data) {
+                const chatContainer = document.getElementById('chat-messages');
+                const messageEl = document.createElement('div');
+                messageEl.className = data.sender.id === this.currentPlayer.id ? 'text-right' : 'text-left';
+                messageEl.innerHTML = `
+                    <span class="font-semibold ${data.sender.id === this.currentPlayer.id ? 'text-blue-400' : 'text-green-400'}">
+                        ${data.sender.name}:
+                    </span>
+                    <span class="ml-2">${this.escapeHtml(data.message)}</span>
+                `;
+                chatContainer.appendChild(messageEl);
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+            }
+
+            addGameLog(message, type = 'info') {
+                const logContainer = document.getElementById('game-log');
+                const logEntry = document.createElement('div');
+                
+                let textColor = 'text-gray-300';
+                let icon = 'fa-circle';
+                
+                switch (type) {
+                    case 'success':
+                        textColor = 'text-green-400';
+                        icon = 'fa-check-circle';
+                        break;
+                    case 'error':
+                        textColor = 'text-red-400';
+                        icon = 'fa-exclamation-circle';
+                        break;
+                    case 'warning':
+                        textColor = 'text-yellow-400';
+                        icon = 'fa-exclamation-triangle';
+                        break;
+                    case 'action':
+                        textColor = 'text-blue-400';
+                        icon = 'fa-bolt';
+                        break;
+                    case 'counter':
+                        textColor = 'text-purple-400';
+                        icon = 'fa-shield';
+                        break;
+                    case 'challenge':
+                        textColor = 'text-orange-400';
+                        icon = 'fa-question-circle';
+                        break;
+                }
+                
+                logEntry.className = `flex items-start ${textColor} mb-1`;
+                logEntry.innerHTML = `
+                    <i class="fa ${icon} mr-2 mt-1"></i>
+                    <span>${message}</span>
+                `;
+                
+                logContainer.appendChild(logEntry);
+                logContainer.scrollTop = logContainer.scrollHeight;
+                
+                // 限制日志条目数量并清理重复
+                this.cleanupLogs(logContainer);
+            }
+
+            cleanupLogs(logContainer) {
+                // 限制日志条目数量
+                if (logContainer.children.length > 50) {
+                    logContainer.removeChild(logContainer.firstChild);
+                }
+                
+                // 简单的重复清理逻辑
+                const logs = Array.from(logContainer.children);
+                for (let i = logs.length - 1; i > 0; i--) {
+                    if (logs[i].textContent === logs[i-1].textContent) {
+                        logContainer.removeChild(logs[i]);
+                    }
+                }
+            }
+
+            updateRoomScreen(roomCode, players) {
+                document.getElementById('room-code-display').textContent = roomCode;
+                document.getElementById('player-count').textContent = players.length;
+
+                const playersList = document.getElementById('players-list');
+                playersList.innerHTML = '';
+
+                players.forEach(player => {
+                    const playerEl = document.createElement('div');
+                    playerEl.className = `p-3 bg-gray-700 rounded-lg flex justify-between items-center ${player.isHost ? 'border border-yellow-500' : ''}`;
+                    playerEl.innerHTML = `
+                        <div class="flex items-center">
+                            <i class="fa fa-user-circle text-xl mr-2 ${player.isHost ? 'text-yellow-400' : 'text-blue-400'}"></i>
+                            <span class="font-semibold">${player.name}</span>
+                            ${player.isHost ? '<span class="ml-2 text-xs bg-yellow-500 text-yellow-900 px-2 py-1 rounded">房主</span>' : ''}
+                        </div>
+                        <span class="text-accent">💰 ${player.coins || 2}</span>
+                    `;
+                    playersList.appendChild(playerEl);
+                });
+
+                // 启用/禁用开始游戏按钮
+                const startBtn = document.getElementById('start-game-btn');
+                const isHost = this.currentPlayer?.isHost;
+                const hasEnoughPlayers = players.length >= 2;
+                
+                startBtn.disabled = !isHost || !hasEnoughPlayers;
+                startBtn.classList.toggle('opacity-50', !isHost || !hasEnoughPlayers);
+
+                this.showScreen('room-screen');
+            }
+
+            startGameUI() {
+                this.updateGameUI();
+                this.showScreen('game-screen');
+                this.addGameLog('游戏开始！');
+                this.addGameLog(`当前回合: ${this.gameState.currentTurn}`);
+                this.addGameLog(`当前玩家: ${this.getPlayerName(this.gameState.currentPlayer)}`);
+            }
+
+            updateGameUI(actionResult = null) {
+                if (!this.gameState) return;
+
+                // 更新游戏状态文本
+                const statusText = document.getElementById('game-status-text');
+                if (this.gameState.status === 'finished') {
+                    statusText.textContent = '游戏结束！';
+                    this.showGameOver();
+                    return;
+                }
+
+                const currentPlayerName = this.getPlayerName(this.gameState.currentPlayer);
+                statusText.textContent = `回合 ${this.gameState.currentTurn} - ${currentPlayerName} 的回合`;
+
+                // 更新牌堆数量
+                document.getElementById('deck-count').textContent = `🃏 ${this.gameState.deck.length}`;
+
+                // 更新当前玩家信息
+                const currentPlayer = this.gameState.players.find(p => p.id === this.currentPlayer.id);
+                if (currentPlayer) {
+                    document.getElementById('current-player-coins').textContent = `💰 ${currentPlayer.coins}`;
+                    
+                    // 更新玩家自己的卡牌显示
+                    this.updatePlayerCards(currentPlayer);
+                }
+
+                // 更新其他玩家信息
+                this.updateOtherPlayers();
+
+                // 处理行动结果
+                if (actionResult) {
+                    actionResult.log.forEach(log => this.addGameLog(log));
+                }
+
+                // 检查挑战阶段
+                if (this.gameState.challengePhase && this.gameState.currentPlayer !== this.currentPlayer.id) {
+                    this.showChallengePhase();
+                } else {
+                    document.getElementById('challenge-phase').classList.add('hidden');
+                }
+
+                // 检查弃牌选择阶段
+                if (this.gameState.discardSelection && this.gameState.discardSelection.playerId === this.currentPlayer.id) {
+                    this.showDiscardSelection();
+                } else {
+                    document.getElementById('discard-selection').classList.add('hidden');
+                }
+
+                // 启用/禁用行动按钮
+                this.updateActionButtons();
+            }
+
+            updateOtherPlayers() {
+                const otherPlayersContainer = document.getElementById('other-players');
+                otherPlayersContainer.innerHTML = '';
+
+                this.gameState.players.forEach(player => {
+                    if (player.id === this.currentPlayer.id) return;
+
+                    const playerEl = document.createElement('div');
+                    const isCurrentTurn = player.id === this.gameState.currentPlayer;
+                    const isAlive = player.isAlive;
+                    
+                    playerEl.className = `p-3 rounded-lg flex justify-between items-center ${
+                        isCurrentTurn ? 'bg-blue-900 border border-blue-500' : 
+                        !isAlive ? 'bg-gray-900 border border-gray-700 opacity-50' : 
+                        'bg-gray-700'
+                    }`;
+                    
+                    playerEl.innerHTML = `
+                        <div>
+                            <div class="flex items-center">
+                                <i class="fa fa-user-circle text-lg mr-2 ${isCurrentTurn ? 'text-blue-400' : 'text-gray-400'}"></i>
+                                <span class="font-semibold ${!isAlive ? 'line-through' : ''}">${player.name}</span>
+                                ${isCurrentTurn ? '<span class="ml-2 text-xs bg-blue-500 text-blue-900 px-2 py-1 rounded">当前</span>' : ''}
+                            </div>
+                            <div class="flex items-center mt-1">
+                                <span class="text-sm text-accent mr-3">💰 ${player.coins}</span>
+                                <div class="flex space-x-1">
+                                    ${Array(player.cardsCount).fill().map(() => '<span class="text-sm">?</span>').join('')}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    otherPlayersContainer.appendChild(playerEl);
+                });
+            }
+
+            updateActionButtons() {
+                const isCurrentTurn = this.gameState.currentPlayer === this.currentPlayer.id;
+                const currentPlayer = this.gameState.players.find(p => p.id === this.currentPlayer.id);
+                const isAlive = currentPlayer?.isAlive;
+                const inChallengePhase = !!this.gameState.challengePhase;
+                const inDiscardPhase = !!this.gameState.discardSelection;
+                const inBlockPhase = !!this.gameState.blockPhase;
+
+                document.querySelectorAll('.action-btn').forEach(btn => {
+                    const disabled = !isCurrentTurn || !isAlive || inChallengePhase || inDiscardPhase || inBlockPhase;
+                    btn.disabled = disabled;
+                    btn.classList.toggle('opacity-50', disabled);
+                });
+
+                // 如果是旁观者，隐藏行动按钮区域
+                const actionButtonsSection = document.getElementById('action-buttons');
+                if (actionButtonsSection) {
+                    actionButtonsSection.classList.toggle('hidden', !isAlive);
+                }
+
+                // 显示旁观者提示
+                const spectatorNotice = document.getElementById('spectator-notice');
+                if (!spectatorNotice && !isAlive) {
+                    const notice = document.createElement('div');
+                    notice.id = 'spectator-notice';
+                    notice.className = 'bg-yellow-900 bg-opacity-30 border border-yellow-600 rounded-lg p-4 mb-4 text-center';
+                    notice.innerHTML = `
+                        <h4 class="font-semibold text-yellow-400 mb-2">
+                            <i class="fa fa-eye mr-2"></i>旁观者模式
+                        </h4>
+                        <p class="text-sm text-yellow-200">
+                            你已被淘汰，但可以继续观看游戏。你可以看到所有玩家的卡牌。
+                        </p>
+                    `;
+                    
+                    // 插入到游戏界面顶部
+                    const gameInterface = document.getElementById('game-interface');
+                    if (gameInterface) {
+                        gameInterface.insertBefore(notice, gameInterface.firstChild);
+                    }
+                }
+            }
+
+            showChallengePhase() {
+                const challengePhase = this.gameState.challengePhase;
+                if (!challengePhase) return;
+
+                const actionPlayerName = this.getPlayerName(challengePhase.action.playerId);
+                const actionText = this.getActionText(challengePhase.action.action);
+                
+                document.getElementById('challenge-text').textContent = 
+                    `${actionPlayerName} 试图${actionText}，你要挑战这个行动吗？`;
+                
+                document.getElementById('countdown-timer').textContent = challengePhase.countdown || 20;
+                
+                // 隐藏其他阶段
+                this.hideAllPhases();
+                
+                // 强制弹出挑战对话框并添加醒目的动画效果
+                const challengePhaseEl = document.getElementById('challenge-phase');
+                challengePhaseEl.classList.remove('hidden');
+                challengePhaseEl.classList.add('animate-pulse-slow', 'ring-4', 'ring-yellow-500');
+                
+                // 5秒后移除动画效果
+                setTimeout(() => {
+                    challengePhaseEl.classList.remove('animate-pulse-slow', 'ring-4', 'ring-yellow-500');
+                }, 5000);
+            }
+
+            hideAllPhases() {
+                document.getElementById('challenge-phase').classList.add('hidden');
+                document.getElementById('counteraction-phase').classList.add('hidden');
+                document.getElementById('discard-selection').classList.add('hidden');
+                document.getElementById('target-selection').classList.add('hidden');
+            }
+
+            getActionText(action) {
+                const actionTexts = {
+                    'income': '获得收入',
+                    'foreign_aid': '获得外国援助',
+                    'coup': '发动政变',
+                    'tax': '征收税金',
+                    'assassinate': '进行刺杀',
+                    'exchange': '交换卡牌',
+                    'steal': '进行偷窃'
+                };
+                return actionTexts[action] || action;
+            }
+
+            updateChallengeCountdown(countdown) {
+                document.getElementById('countdown-timer').textContent = countdown;
+                
+                // 添加倒计时动画效果
+                const timerEl = document.getElementById('countdown-timer');
+                timerEl.classList.remove('animate-pulse');
+                void timerEl.offsetWidth; // 触发重排
+                timerEl.classList.add('animate-pulse');
+                
+                if (countdown <= 5) {
+                    timerEl.classList.add('text-red-400');
+                } else {
+                    timerEl.classList.remove('text-red-400');
+                }
+            }
+
+            updateCounteractionCountdown(countdown) {
+                document.getElementById('counteraction-timer').textContent = countdown;
+                
+                // 添加倒计时动画效果
+                const timerEl = document.getElementById('counteraction-timer');
+                timerEl.classList.remove('animate-pulse');
+                void timerEl.offsetWidth; // 触发重排
+                timerEl.classList.add('animate-pulse');
+                
+                if (countdown <= 5) {
+                    timerEl.classList.add('text-red-400');
+                } else {
+                    timerEl.classList.remove('text-red-400');
+                }
+            }
+
+            showCounteractionPhase(data) {
+                // 隐藏其他阶段
+                this.hideAllPhases();
+                
+                // 显示反制阶段
+                const counteractionPhase = document.getElementById('counteraction-phase');
+                counteractionPhase.classList.remove('hidden');
+                
+                // 设置反制文本
+                const counteractionText = document.getElementById('counteraction-text');
+                counteractionText.textContent = data.message || `你可以使用 ${data.counterRole} 进行反制吗？`;
+                
+                // 设置倒计时
+                document.getElementById('counteraction-timer').textContent = data.countdown;
+                
+                // 绑定反制按钮事件
+                document.getElementById('counteraction-yes-btn').onclick = () => this.handleCounteraction(true);
+                document.getElementById('counteraction-no-btn').onclick = () => this.handleCounteraction(false);
+            }
+
+            handleCounteraction(counter) {
+                console.log('发送反制响应:', counter);
+                this.socket.emit('counteraction', {
+                    roomCode: this.currentRoom,
+                    playerId: this.currentPlayer.id,
+                    counter: counter
+                });
+                
+                // 隐藏反制阶段
+                document.getElementById('counteraction-phase').classList.add('hidden');
+            }
+                } else {
+                    timerEl.classList.remove('text-red-400');
+                }
+            }
+
+            showDiscardSelection() {
+                const discardSelection = this.gameState.discardSelection;
+                if (!discardSelection) return;
+
+                const currentPlayer = this.gameState.players.find(p => p.id === this.currentPlayer.id);
+                if (!currentPlayer || !currentPlayer.cards) return;
+
+                document.getElementById('discard-text').textContent = 
+                    `你被${this.getPlayerName(discardSelection.action.playerId)}${this.getActionText(discardSelection.action.action)}，请选择一张卡牌弃掉`;
+
+                const cardsContainer = document.getElementById('discard-cards');
+                cardsContainer.innerHTML = '';
+
+                currentPlayer.cards.forEach((card, index) => {
+                    const cardBtn = document.createElement('button');
+                    cardBtn.className = 'discard-card-btn bg-blue-900 hover:bg-blue-800 p-4 rounded-xl transition-all flex flex-col items-center cursor-pointer';
+                    cardBtn.innerHTML = `
+                        <div class="w-16 h-20 bg-gradient-to-b from-blue-700 to-blue-900 rounded-lg border-2 border-blue-400 flex items-center justify-center mb-2 shadow-lg">
+                            <span class="text-2xl font-bold text-white">${this.getCardDisplayName(card)}</span>
+                        </div>
+                        <span class="text-sm font-semibold">${this.getCardRoleName(card)}</span>
+                    `;
+                    cardBtn.addEventListener('click', () => this.selectDiscardCard(index));
+                    cardsContainer.appendChild(cardBtn);
+                });
+
+                document.getElementById('discard-selection').classList.remove('hidden');
+            }
+
+            selectDiscardCard(cardIndex) {
+                this.socket.emit('selectDiscard', {
+                    roomCode: this.currentRoom,
+                    playerId: this.currentPlayer.id,
+                    cardIndex
+                });
+                document.getElementById('discard-selection').classList.add('hidden');
+            }
+
+            handleDiscardResult(result) {
+                result.log.forEach(log => this.addGameLog(log));
+            }
+
+            updatePlayerCards(currentPlayer) {
+                if (!currentPlayer || !currentPlayer.cards) return;
+
+                const cardsContainer = document.querySelector('#current-player-info .flex.space-x-2');
+                cardsContainer.innerHTML = '';
+
+                currentPlayer.cards.forEach(card => {
+                    const cardEl = document.createElement('div');
+                    cardEl.className = 'w-12 h-16 bg-gradient-to-b from-blue-700 to-blue-900 rounded-lg border border-blue-300 flex items-center justify-center cursor-pointer hover:scale-110 transition-all card-flip';
+                    cardEl.innerHTML = `
+                        <div class="card-inner w-full h-full flex items-center justify-center">
+                            <div class="card-front w-full h-full flex items-center justify-center">
+                                <span class="text-2xl font-bold text-white">${this.getCardDisplayName(card)}</span>
+                            </div>
+                            <div class="card-back w-full h-full flex items-center justify-center transform rotate-y-180 absolute">
+                                <span class="text-2xl">?</span>
+                            </div>
+                        </div>
+                    `;
+                    
+                    // 添加悬停提示
+                    cardEl.title = this.getCardRoleName(card);
+                    
+                    cardsContainer.appendChild(cardEl);
+                });
+
+                // 更新卡牌数量提示
+                document.getElementById('player-role-hint').textContent = 
+                    `你有 ${currentPlayer.cards.length} 张卡牌`;
+            }
+
+            getCardDisplayName(card) {
+                const cardNames = {
+                    'duke': '公爵',
+                    'assassin': '刺客',
+                    'ambassador': '大使',
+                    'captain': '上尉',
+                    'contessa': '女爵'
+                };
+                return cardNames[card] || card;
+            }
+
+            handleBlock(block) {
+                this.socket.emit('blockResponse', {
+                    roomCode: this.currentRoom,
+                    playerId: this.currentPlayer.id,
+                    block
+                });
+                document.getElementById('block-phase').classList.add('hidden');
+            }
+
+            showBlockPhase(data) {
+                document.getElementById('block-text').textContent = data.message || '你可以阻止这个行动吗？';
+                document.getElementById('block-timer').textContent = data.countdown || 15;
+                document.getElementById('block-phase').classList.remove('hidden');
+            }
+
+            updateBlockCountdown(countdown) {
+                document.getElementById('block-timer').textContent = countdown;
+                
+                // 添加倒计时动画效果
+                const timerEl = document.getElementById('block-timer');
+                timerEl.classList.remove('animate-pulse');
+                void timerEl.offsetWidth; // 触发重排
+                timerEl.classList.add('animate-pulse');
+                
+                if (countdown <= 5) {
+                    timerEl.classList.add('text-red-400');
+                } else {
+                    timerEl.classList.remove('text-red-400');
+                }
+            }
+
+            handleCardSwapped(data) {
+                // 添加卡牌交换的游戏日志
+                this.addGameLog(data.message);
+                
+                // 如果是当前玩家的卡牌被交换，更新界面
+                if (data.playerId === this.currentPlayer.id) {
+                    // 触发卡牌更新
+                    this.updatePlayerCards();
+                    
+                    // 显示卡牌交换的视觉效果
+                    this.showCardSwapEffect();
+                }
+            }
+
+            showCardSwapEffect() {
+                const playerCardsContainer = document.getElementById('player-cards');
+                if (playerCardsContainer) {
+                    // 添加闪烁效果
+                    playerCardsContainer.classList.add('animate-pulse');
+                    setTimeout(() => {
+                        playerCardsContainer.classList.remove('animate-pulse');
+                    }, 2000);
+                }
+            }
+
+            getCardRoleName(card) {
+                const roleNames = {
+                    'duke': '公爵 - 征税+3金币，阻止外国援助',
+                    'assassin': '刺客 - 刺杀-3金币，目标弃牌',
+                    'ambassador': '大使 - 交换卡牌，阻止偷窃',
+                    'captain': '上尉 - 偷窃+2金币，阻止偷窃',
+                    'contessa': '女爵 - 免疫刺杀'
+                };
+                return roleNames[card] || card;
+            }
+
+            showGameOver() {
+                if (this.gameState.winner) {
+                    const winnerName = this.getPlayerName(this.gameState.winner);
+                    document.getElementById('winner-name').textContent = winnerName;
+                    this.addGameLog(`游戏结束！胜利者是 ${winnerName}！`);
+                    
+                    // 游戏结束后清除存储的状态
+                    this.clearGameState();
+                    
+                    // 延迟显示游戏结束界面
+                    setTimeout(() => {
+                        this.showScreen('game-over-screen');
+                    }, 2000);
+                }
+            }
+
+            // 存储游戏状态到localStorage
+            saveGameState(roomCode, playerId, playerName) {
+                if (roomCode) localStorage.setItem('coup_roomCode', roomCode);
+                if (playerId) localStorage.setItem('coup_playerId', playerId);
+                if (playerName) localStorage.setItem('coup_playerName', playerName);
+            }
+
+            // 清除存储的游戏状态
+            clearGameState() {
+                localStorage.removeItem('coup_roomCode');
+                localStorage.removeItem('coup_playerId');
+                localStorage.removeItem('coup_playerName');
+            }
+
+            // 重新连接到游戏
+            reconnectToGame(roomCode, playerId, playerName) {
+                console.log('尝试重新连接到游戏:', { roomCode, playerId, playerName });
+                
+                this.currentRoom = roomCode;
+                this.currentPlayer = {
+                    id: playerId,
+                    name: playerName,
+                    isHost: false // 重连时先设为false，连接成功后会更新
+                };
+                
+                this.connectToSocket();
+                this.joinSocketRoom(roomCode, playerName, playerId);
+                
+                // 显示加载界面
+                this.showReconnectingScreen();
+            }
+
+            // 显示重连中界面
+            showReconnectingScreen() {
+                const app = document.getElementById('app');
+                app.innerHTML = `
+                    <div class="text-center py-16">
+                        <div class="inline-block animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-500 mb-4"></div>
+                        <h2 class="text-2xl font-bold mb-4">正在重新连接到游戏...</h2>
+                        <p class="text-gray-300">房间代码: ${this.currentRoom}</p>
+                        <p class="text-gray-400 mt-4">如果长时间无法连接，请刷新页面重新加入</p>
+                        <button id="cancel-reconnect-btn" class="mt-6 px-6 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-all">
+                            取消重连
+                        </button>
+                    </div>
+                `;
+                
+                // 绑定取消按钮事件
+                document.getElementById('cancel-reconnect-btn').addEventListener('click', () => {
+                    this.clearGameState();
+                    location.reload();
+                });
+            }
+
+            getPlayerName(playerId) {
+                const player = this.gameState.players.find(p => p.id === playerId);
+                return player ? player.name : 'Unknown';
+            }
+
+            copyRoomCode() {
+                const code = document.getElementById('room-code-display').textContent;
+                navigator.clipboard.writeText(code).then(() => {
+                    this.showSuccess('房间代码已复制到剪贴板');
+                }).catch(() => {
+                    this.showError('复制失败');
+                });
+            }
+
+            playAgain() {
+                // 这里应该实现重新开始游戏的逻辑
+                this.showError('功能开发中');
+            }
+
+            backToMenu() {
+                this.leaveRoom();
+            }
+
+            showScreen(screenId) {
+                document.querySelectorAll('#app > div').forEach(div => {
+                    div.classList.add('hidden');
+                });
+                document.getElementById(screenId).classList.remove('hidden');
+            }
+
+            showError(message) {
+                this.showNotification(message, 'error');
+            }
+
+            showSuccess(message) {
+                this.showNotification(message, 'success');
+            }
+
+            addGameLog(message, type = 'info') {
+                const logContainer = document.getElementById('game-log');
+                const logEntry = document.createElement('div');
+                
+                let textColor = 'text-gray-300';
+                let icon = 'fa-circle';
+                
+                switch (type) {
+                    case 'success':
+                        textColor = 'text-green-400';
+                        icon = 'fa-check-circle';
+                        break;
+                    case 'error':
+                        textColor = 'text-red-400';
+                        icon = 'fa-exclamation-circle';
+                        break;
+                    case 'warning':
+                        textColor = 'text-yellow-400';
+                        icon = 'fa-exclamation-triangle';
+                        break;
+                    case 'action':
+                        textColor = 'text-blue-400';
+                        icon = 'fa-bolt';
+                        break;
+                    case 'counter':
+                        textColor = 'text-purple-400';
+                        icon = 'fa-shield';
+                        break;
+                    case 'challenge':
+                        textColor = 'text-orange-400';
+                        icon = 'fa-question-circle';
+                        break;
+                }
+                
+                logEntry.className = `flex items-start ${textColor}`;
+                logEntry.innerHTML = `
+                    <i class="fa ${icon} mr-2 mt-1"></i>
+                    <span>${message}</span>
+                `;
+                
+                logContainer.appendChild(logEntry);
+                logContainer.scrollTop = logContainer.scrollHeight;
+                
+                // 限制日志条目数量
+                if (logContainer.children.length > 50) {
+                    logContainer.removeChild(logContainer.firstChild);
+                }
+            }
+
+            showNotification(message, type = 'info') {
+                const logContainer = document.getElementById('game-log');
+                const logEntry = document.createElement('div');
+                
+                let textColor = 'text-gray-300';
+                let icon = 'fa-circle';
+                
+                switch (type) {
+                    case 'success':
+                        textColor = 'text-green-400';
+                        icon = 'fa-check-circle';
+                        break;
+                    case 'error':
+                        textColor = 'text-red-400';
+                        icon = 'fa-exclamation-circle';
+                        break;
+                    case 'warning':
+                        textColor = 'text-yellow-400';
+                        icon = 'fa-exclamation-triangle';
+                        break;
+                    case 'action':
+                        textColor = 'text-blue-400';
+                        icon = 'fa-bolt';
+                        break;
+                    case 'counter':
+                        textColor = 'text-purple-400';
+                        icon = 'fa-shield';
+                        break;
+                    case 'challenge':
+                        textColor = 'text-orange-400';
+                        icon = 'fa-question-circle';
+                        break;
+                }
+                
+                logEntry.className = `flex items-start ${textColor}`;
+                logEntry.innerHTML = `
+                    <i class="fa ${icon} mr-2 mt-1"></i>
+                    <span>${message}</span>
+                `;
+                
+                logContainer.appendChild(logEntry);
+                logContainer.scrollTop = logContainer.scrollHeight;
+                
+                // 限制日志条目数量
+                if (logContainer.children.length > 50) {
+                    logContainer.removeChild(logContainer.firstChild);
+                }
+            }
+                // 简单的通知实现
+                const notification = document.createElement('div');
+                notification.className = `fixed top-4 right-4 px-6 py-3 rounded-lg shadow-lg z-50 transform transition-all duration-300 translate-x-full opacity-0 ${
+                    type === 'error' ? 'bg-red-600' : 
+                    type === 'success' ? 'bg-green-600' : 
+                    'bg-blue-600'
+                }`;
+                notification.textContent = message;
+                document.body.appendChild(notification);
+
+                // 显示通知
+                setTimeout(() => {
+                    notification.classList.remove('translate-x-full', 'opacity-0');
+                }, 100);
+
+                // 自动隐藏
+                setTimeout(() => {
+                    notification.classList.add('translate-x-full', 'opacity-0');
+                    setTimeout(() => {
+                        document.body.removeChild(notification);
+                    }, 300);
+                }, 3000);
+            }
+
+            escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+        }
+
+        // 初始化游戏
+        document.addEventListener('DOMContentLoaded', () => {
+            window.coupGame = new CoupGame();
+        });
+    </script>
+</body>
+</html>
